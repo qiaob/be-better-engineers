@@ -1,0 +1,13 @@
+{
+  "name": "be-better-engineers",
+  "owner": {
+    "name": "qiaob"
+  },
+  "plugins": [
+    {
+      "name": "be-better-engineers",
+      "source": "./",
+      "description": "成为更好的工程师：一个按固定流程、以图为主教人学会新东西的 skill。"
+    }
+  ]
+}

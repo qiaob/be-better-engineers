@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: page-isolation-levels
+expected_outcome: |
+  用 skill 的模板生成一个单文件 HTML 学习页，用检查脚本检查到没有必须改的问题，并如实标出内容的核对程度。

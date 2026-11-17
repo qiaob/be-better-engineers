@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 上面三行给独立文件用。用 Artifact 工具发布时删掉这三行，它自带外壳。 -->
+<title>一致性哈希学习页</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 布局：单栏工作簿。顶部一条进度轨，八个阶段自上而下，每个阶段一张图加一件要动手的事。 */
+:root{
+  --bg:#f3f5f8; --panel:#ffffff; --ink:#161c26; --muted:#5d6877; --faint:#8793a3;
+  --line:#dde2e9; --line-strong:#b9c2ce; --tint-1:#eef1f5; --tint-2:#e3e8ef;
+  --accent:#4a41cf; --accent-soft:#ecebfb;
+  --ok:#157a4f; --ok-soft:#e1f3ea; --warn:#93600a; --warn-soft:#fbf0d9; --bad:#b9362f; --bad-soft:#fbe7e5;
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a;
+  --shadow:0 1px 2px rgba(22,28,38,.06);
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1217; --panel:#171c23; --ink:#e8ebf0; --muted:#a0aab8; --faint:#77818f;
+    --line:#262d37; --line-strong:#3a4350; --tint-1:#1c222a; --tint-2:#232a34;
+    --accent:#9a93f0; --accent-soft:#232044;
+    --ok:#4cc38a; --ok-soft:#13291f; --warn:#e0b04c; --warn-soft:#2e2510; --bad:#f0736a; --bad-soft:#331917;
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70;
+    --shadow:0 0 0 rgba(0,0,0,0);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1217; --panel:#171c23; --ink:#e8ebf0; --muted:#a0aab8; --faint:#77818f;
+  --line:#262d37; --line-strong:#3a4350; --tint-1:#1c222a; --tint-2:#232a34;
+  --accent:#9a93f0; --accent-soft:#232044;
+  --ok:#4cc38a; --ok-soft:#13291f; --warn:#e0b04c; --warn-soft:#2e2510; --bad:#f0736a; --bad-soft:#331917;
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70;
+  --shadow:0 0 0 rgba(0,0,0,0);
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15.5px/1.7 var(--sans);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+h1,h2,h3,p,ol,ul,dl,dd,figure{margin:0}
+ol,ul{padding:0;list-style:none}
+button,input,textarea{font:inherit;color:inherit}
+code{font-family:var(--mono);font-size:.9em;background:var(--tint-1);padding:1px 5px;border-radius:4px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+.wrap{max-width:900px;margin:0 auto;padding-block:28px 72px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:18px}
+
+/* 页头 */
+.top{display:flex;flex-direction:column;gap:10px}
+.kicker{font-size:12.5px;letter-spacing:.16em;color:var(--muted);font-weight:700}
+.top h1{font-size:clamp(26px,5vw,34px);line-height:1.25;text-wrap:balance}
+.lede{font-size:17px;max-width:40em}
+.meta{display:flex;flex-wrap:wrap;gap:8px}
+.tag{font-size:12.5px;padding:3px 10px;border:1px solid var(--line-strong);border-radius:999px;color:var(--muted);background:var(--panel)}
+.tag b{color:var(--ink);font-weight:600}
+
+/* 进度轨 */
+.rail{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:8px;
+  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.rail ol{display:flex;gap:2px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+.rail a{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 5px;border-radius:999px;text-decoration:none;
+  color:var(--muted);font-size:13px;white-space:nowrap;border:1px solid transparent}
+.rail em{font-style:normal}
+.rail .no{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;
+  border:1.5px solid var(--line-strong);font-variant-numeric:tabular-nums}
+.rail a.done .no{background:var(--ok);border-color:var(--ok);color:var(--panel)}
+.rail a.here{color:var(--ink);border-color:var(--line-strong);background:var(--panel)}
+.rail-count{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (max-width:640px){.rail a em{display:none}.rail a{padding:4px}}
+
+/* 阶段 */
+#stages{display:flex;flex-direction:column;gap:18px}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  scroll-margin-top:60px;display:flex;flex-direction:column;min-width:0}
+.stage-head{display:flex;gap:14px;align-items:flex-start;padding:18px 20px 0}
+.stage-no{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;
+  font-size:15px;background:var(--ink);color:var(--panel);font-variant-numeric:tabular-nums}
+.stage-head h2{font-size:19px;line-height:1.35;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.stage-head h2 small{font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.1em}
+.stage-q{color:var(--muted);font-size:14.5px}
+.stage-body{padding:16px 20px 18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.stage-foot{border-top:1px dashed var(--line-strong);padding:12px 20px 14px}
+.pass{display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-size:14px}
+.pass input{margin-top:5px;accent-color:var(--ok);width:16px;height:16px;flex:none}
+.sub{font-size:12.5px;font-weight:700;letter-spacing:.06em;color:var(--muted)}
+.hint-line{font-size:13px;color:var(--muted)}
+figure{display:flex;flex-direction:column;gap:8px;min-width:0}
+figcaption{font-size:13px;color:var(--muted)}
+
+/* 按钮与输入 */
+.ctl{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.btn{cursor:pointer;padding:7px 14px;border-radius:9px;border:1px solid var(--line-strong);background:var(--panel);
+  font-size:14px;font-weight:600}
+.btn:hover:not([disabled]){border-color:var(--ink)}
+.btn.primary,.btn.sel{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+.btn[disabled]{opacity:.4;cursor:default}
+.btn.small{padding:4px 10px;font-size:13px;font-weight:500}
+input[type=text],textarea{width:100%;background:var(--panel);border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px}
+textarea{min-height:110px;resize:vertical;line-height:1.6}
+
+/* 1 定界 */
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.fact{background:var(--panel);padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.fact dt{font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+.fact dd{font-size:14.5px}
+.ring{border-radius:16px;padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.ring-out{border:1.5px dashed var(--line-strong)}
+.ring-edge{border:1.5px solid var(--line-strong);background:var(--tint-1)}
+.ring-core{border:2px solid var(--ink);background:var(--panel)}
+.ring-label{font-size:12.5px;font-weight:700;letter-spacing:.06em;color:var(--muted);display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.ring-label span{font-weight:400;letter-spacing:0}
+.ring-core>.ring-label{color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13.5px;padding:3px 10px;border-radius:999px;border:1px solid var(--line-strong);background:var(--panel)}
+.ring-core>.chips .chip{border-color:var(--ink);font-weight:600}
+.ring-out>.chips .chip{color:var(--muted);border-style:dashed;background:transparent}
+.prereqs{display:flex;flex-direction:column;gap:6px}
+details.pre{border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+details.pre summary{cursor:pointer;font-weight:600;font-size:14.5px}
+details.pre summary small{font-weight:400;color:var(--muted);margin-left:8px}
+details.pre p{margin-top:6px;font-size:14.5px}
+
+/* 图 */
+.fig{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow-x:auto;padding:10px}
+.fig svg{display:block;margin:0 auto;max-width:100%;height:auto}
+.fig:not(.scroll) svg{width:100%;min-width:520px}
+.fig.scroll svg{max-width:none}
+.fig text{font-family:var(--sans);font-size:13px;fill:var(--ink)}
+.node-note{min-height:1.7em;font-size:14.5px}
+.g-node{cursor:pointer}
+.g-node rect{fill:var(--panel);stroke:var(--line-strong);stroke-width:1.5}
+.g-node text{font-weight:600;pointer-events:none}
+.g-node.kind-core rect{stroke:var(--ink);stroke-width:2}
+.g-node.kind-prereq rect{stroke-dasharray:5 4;fill:var(--tint-1)}
+.g-node.kind-prereq text{font-weight:400;fill:var(--muted)}
+.g-node.on rect{stroke:var(--accent);stroke-width:2.5;fill:var(--accent-soft)}
+.g-node.on text{fill:var(--ink)}
+.g-edge line{stroke:var(--line-strong);stroke-width:1.5}
+.g-edge text{font-size:12px;fill:var(--muted);paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round}
+.g-edge.on line{stroke:var(--accent);stroke-width:2.2}
+.g-edge.on text{fill:var(--ink)}
+.g-arrow{fill:var(--line-strong)}
+.g-arrow.on{fill:var(--accent)}
+.dimmed .g-node:not(.on):not(.near),.dimmed .g-edge:not(.on){opacity:.36}
+.q-actor rect{fill:var(--tint-1);stroke:var(--line-strong);stroke-width:1.5}
+.q-actor text{font-weight:600}
+.q-life{stroke:var(--line-strong);stroke-dasharray:4 5}
+.q-msg line,.q-msg path{stroke:var(--faint);stroke-width:1.5;fill:none}
+.q-msg text{font-size:12.5px;fill:var(--muted);paint-order:stroke;stroke:var(--panel);stroke-width:5px;stroke-linejoin:round}
+.q-msg.on line,.q-msg.on path{stroke:var(--accent);stroke-width:2.4}
+.q-msg.on text{fill:var(--ink);font-weight:600}
+.q-arrow{fill:var(--faint)}
+.q-arrow.on{fill:var(--accent)}
+
+/* 自己画帧时用的 class：颜色都走这里，深色模式才不会看不清 */
+.fig .t-muted{fill:var(--muted)} .fig .t-strong{font-weight:700} .fig .t-small{font-size:11.5px}
+.fig .t-num{font-variant-numeric:tabular-nums} .fig .t-inv{fill:var(--panel)} .fig .t-mono{font-family:var(--mono)}
+.fig .f-none{fill:none} .fig .panel{fill:var(--panel)} .fig .tint{fill:var(--tint-1)} .fig .tint2{fill:var(--tint-2)}
+.fig .ink{fill:var(--ink)} .fig .acc{fill:var(--accent)} .fig .acc-soft{fill:var(--accent-soft)}
+.fig .hot{fill:var(--bad)} .fig .hot-soft{fill:var(--bad-soft)} .fig .ok{fill:var(--ok)} .fig .ok-soft{fill:var(--ok-soft)}
+.fig .c1{fill:var(--c1)} .fig .c2{fill:var(--c2)} .fig .c3{fill:var(--c3)}
+.fig .s-line{stroke:var(--line-strong)} .fig .s-faint{stroke:var(--line)} .fig .s-ink{stroke:var(--ink)}
+.fig .s-acc{stroke:var(--accent)} .fig .s-hot{stroke:var(--bad)} .fig .s-ok{stroke:var(--ok)}
+.fig .sc1{stroke:var(--c1)} .fig .sc2{stroke:var(--c2)} .fig .sc3{stroke:var(--c3)}
+.fig .gap{stroke:var(--panel);stroke-width:2}
+
+/* 4 演示 */
+.demo{display:flex;flex-direction:column;gap:12px;min-width:0}
+.demo h3{font-size:16px}
+.cap{font-size:15px;min-height:3.4em}
+.cap b{font-variant-numeric:tabular-nums;color:var(--muted);margin-right:8px;font-weight:600}
+.dots{display:flex;flex:1;justify-content:center;flex-wrap:wrap}
+.dots button{width:22px;height:22px;display:grid;place-items:center;background:none;border:0;padding:0;cursor:pointer}
+.dots button::before{content:"";width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line-strong)}
+.dots button.seen::before{background:var(--line-strong)}
+.dots button.on::before{background:var(--accent);border-color:var(--accent)}
+.ask{background:var(--accent-soft);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.ask-tag{font-size:12.5px;font-weight:700;letter-spacing:.08em;color:var(--accent)}
+.ask-q{font-weight:600}
+.ask-a{border-top:1px dashed var(--line-strong);padding-top:8px}
+
+/* 3 连旧 */
+.pairs{display:flex;flex-direction:column;gap:10px}
+.pair{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.pair-top{display:grid;grid-template-columns:1fr auto 1fr}
+.pair-top>div{padding:10px 14px;min-width:0}
+.pair-known{background:var(--tint-1)}
+.pair-top>.pair-arrow{display:grid;place-items:center;padding:0 2px;color:var(--muted);font-size:18px}
+.pair-new{font-weight:600}
+.pair-lab{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted)}
+.pair-notes{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.pair-notes>div{background:var(--panel);padding:8px 14px;font-size:14px;min-width:0}
+.same b{color:var(--ok)} .differ b{color:var(--warn)}
+@media (max-width:560px){.pair-top{grid-template-columns:1fr}.pair-top>.pair-arrow{display:none}.pair-notes{grid-template-columns:1fr}}
+
+/* 5 讲回 */
+.explain{display:flex;flex-direction:column;gap:10px}
+.prompt{font-weight:600;font-size:16px}
+.points{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.points label{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;cursor:pointer}
+.points input{margin-top:5px;accent-color:var(--ok);flex:none}
+.cover{font-size:14px;color:var(--muted)}
+
+/* 6 动手 */
+.quiz{display:flex;flex-direction:column;gap:18px}
+.qa{display:flex;flex-direction:column;gap:8px}
+.qa-q{font-weight:600}
+.opts{display:flex;flex-direction:column;gap:6px}
+.opt{text-align:left;cursor:pointer;padding:9px 12px;border-radius:9px;border:1px solid var(--line-strong);
+  background:var(--panel);font-size:14.5px;display:flex;gap:10px;align-items:baseline}
+.opt:hover:not([disabled]){border-color:var(--ink)}
+.opt .mark{flex:none;width:1.2em;font-weight:700;color:var(--muted)}
+.opt.right{border-color:var(--ok);background:var(--ok-soft)} .opt.right .mark{color:var(--ok)}
+.opt.wrong{border-color:var(--bad);background:var(--bad-soft)} .opt.wrong .mark{color:var(--bad)}
+.opt[disabled]{cursor:default}
+.why,.reveal{font-size:14.5px;padding:8px 12px;border-radius:9px;background:var(--tint-1)}
+.tasks{display:flex;flex-direction:column;gap:14px}
+.task{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.task-t{font-weight:600}
+.reveals{display:flex;flex-direction:column;gap:6px}
+.reveals:empty{display:none}
+.self{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;color:var(--muted)}
+
+/* 7 探边 */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:520px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12.5px;letter-spacing:.06em;color:var(--muted);background:var(--tint-1);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.myths{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.flip{text-align:left;cursor:pointer;border:1px solid var(--line-strong);border-radius:12px;padding:12px 14px;
+  background:var(--panel);display:flex;flex-direction:column;gap:6px;min-height:124px;font-size:14.5px}
+.flip .lab{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--bad)}
+.flip[aria-pressed="true"]{background:var(--ok-soft);border-color:var(--ok)}
+.flip[aria-pressed="true"] .lab{color:var(--ok)}
+.flip .turn{margin-top:auto;font-size:12.5px;color:var(--muted)}
+.deeper{display:flex;flex-direction:column;gap:6px;font-size:14.5px}
+
+/* 8 留存 */
+.card{border:2px solid var(--ink);border-radius:12px;padding:12px 16px;display:flex;flex-direction:column}
+.card li{line-height:2.1}
+.blank{cursor:pointer;font-weight:600;padding:1px 10px;border-radius:6px;border:1.5px dashed var(--accent);
+  background:var(--accent-soft);color:var(--accent);min-width:3em;line-height:1.5}
+.blank.open{border-style:solid;background:transparent;color:var(--ink);border-color:var(--line-strong)}
+.plan-wrap{display:flex;flex-direction:column;gap:10px}
+.plan{display:flex;flex-direction:column;gap:6px}
+.plan li{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:14.5px;padding:8px 12px;border:1px solid var(--line);border-radius:10px}
+.plan .when{font-variant-numeric:tabular-nums;font-weight:600;min-width:6.5em}
+.pill{font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--tint-2);color:var(--muted);white-space:nowrap}
+.pill.due{background:var(--warn-soft);color:var(--warn)} .pill.ok{background:var(--ok-soft);color:var(--ok)}
+
+/* 提示条与页脚 */
+#notice{display:flex;flex-direction:column;gap:10px}
+#notice:empty,#notice-review:empty{display:none}
+.banner{border:1px solid var(--warn);background:var(--warn-soft);border-radius:12px;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.err{border:1px solid var(--bad);background:var(--bad-soft);border-radius:10px;padding:10px 14px;font-size:14px;white-space:pre-wrap}
+.foot{display:flex;flex-direction:column;gap:10px}
+</style>
+
+<div class="wrap">
+  <header class="top" id="top"></header>
+  <nav class="rail" id="rail" aria-label="学习进度"></nav>
+  <div id="notice"></div>
+  <main id="stages"></main>
+  <footer class="foot" id="foot"></footer>
+</div>
+
+<script>
+/* ============ 这一页的内容：只改这里，字段说明见 references/page-data.md ============ */
+const LESSON = // 一份完整的学习页数据，主题是「一致性哈希」。
+// 用法：用这个文件的全部内容，替换模板里的占位标记 /*__LESSON__*/ null。
+// 数据可以是一个普通的对象字面量；这里因为图里的位置和数字要现算，所以包了一层函数。
+(() => {
+  /* ---- 这一页专用的小工具：图里的位置和数字都是实算的，不是画上去的 ---- */
+  const fnv = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; };
+  const mix = h => { h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16; return h >>> 0; };
+  const hash = s => mix(fnv(s));
+  const TAU = Math.PI * 2;
+  const ang = name => hash(name) / 4294967296 * TAU;              // 环上的角度：0 在正上方，顺时针增大
+  const NODE = n => n + '#1335', KEY = i => 'k' + i + '#1137';     // 后缀是挑过的，只为让图看得清
+  const ABC = ['A', 'B', 'C'], ABCD = ['A', 'B', 'C', 'D'];
+  const USERS = Array.from({length: 10000}, (_, i) => 'user:' + i);
+  const MANY = USERS.map(ang);
+  const ringOf = (nodes, v = 1) => nodes.flatMap(n => Array.from({length: v}, (_, i) => ({node: n, a: ang(v === 1 ? NODE(n) : NODE(n) + '/' + i)}))).sort((p, q) => p.a - q.a);
+  const owner = (ring, a) => (ring.find(p => p.a >= a) || ring[0]).node;    // 顺时针遇到的第一个点
+  const count = (ring, nodes, angles) => { const c = {}; nodes.forEach(n => { c[n] = 0; }); angles.forEach(a => { c[owner(ring, a)]++; }); return c; };
+  const pct = (ring, nodes) => { const c = count(ring, nodes, MANY); return nodes.map(n => ({node: n, pct: c[n] / MANY.length * 100})); };
+
+  const r3 = ringOf(ABC), r4 = ringOf(ABCD), r16 = ringOf(ABC, 16), r128 = ringOf(ABC, 128);
+  const keyAng = Array.from({length: 12}, (_, i) => ang(KEY(i + 1)));
+  const keyHash = Array.from({length: 12}, (_, i) => hash(KEY(i + 1)));
+  const k3 = count(r3, ABC, keyAng), k4 = count(r4, ABCD, keyAng);
+  const moved = a => owner(r3, a) !== owner(r4, a);
+  const movedRing = keyAng.filter(moved).length;
+  const movedRingPct = (MANY.filter(moved).length / MANY.length * 100).toFixed(1);
+  const movedFrom = Array.from(new Set(MANY.filter(moved).map(a => owner(r3, a)))).join('、');
+  const movedMod = keyHash.filter(h => h % 3 !== h % 4).length;
+  const movedModPct = (USERS.map(hash).filter(h => h % 3 !== h % 4).length / USERS.length * 100).toFixed(1);
+  const p1 = pct(r3, ABC), p16 = pct(r16, ABC), p128 = pct(r128, ABC);
+  const spread = p => (Math.max(...p.map(x => x.pct)) - Math.min(...p.map(x => x.pct))).toFixed(1);
+  const list = p => p.map(x => x.node + ' ' + x.pct.toFixed(0) + '%').join('、');
+  const hop = USERS.find(k => moved(ang(k)));                      // 一个在 D 加入后换了节点的键
+  const hopFrom = owner(r3, ang(hop));
+
+  /* ---- 画图 ---- */
+  const CX = 170, CY = 172, R = 118, X0 = 372, f1 = v => v.toFixed(1);
+  const at = (a, r = R) => [CX + r * Math.sin(a), CY - r * Math.cos(a)];
+  const sCls = n => n === 'D' ? 's-ink' : 'sc' + (ABC.indexOf(n) + 1);
+  const fCls = n => n === 'D' ? 'ink' : 'c' + (ABC.indexOf(n) + 1);
+  const svg = (label, inner) => `<svg viewBox="0 0 640 344" role="img" aria-label="${label}">${inner}</svg>`;
+  const arcs = (ring, gap) => ring.map((p, i) => {
+    let a0 = ring[(i - 1 + ring.length) % ring.length].a + gap;
+    const a1 = p.a - gap;
+    if (i === 0) a0 -= TAU;
+    if (a1 <= a0) return '';
+    const [x0, y0] = at(a0), [x1, y1] = at(a1);
+    return `<path d="M${f1(x0)} ${f1(y0)} A${R} ${R} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${f1(x1)} ${f1(y1)}" fill="none" stroke-width="8" class="${sCls(p.node)}"/>`;
+  }).join('');
+  const keyDots = hot => keyAng.map(a => {
+    const [x, y] = at(a);
+    return hot && hot(a)
+      ? `<circle cx="${f1(x)}" cy="${f1(y)}" r="10.5" fill="none" stroke-width="2" class="s-hot"/><circle cx="${f1(x)}" cy="${f1(y)}" r="5.5" class="hot gap"/>`
+      : `<circle cx="${f1(x)}" cy="${f1(y)}" r="5.5" class="ink gap"/>`;
+  }).join('');
+  const nodeMarks = nodes => nodes.map(n => {
+    const a = ang(NODE(n)), [x, y] = at(a), [lx, ly] = at(a, R + 26);
+    return `<circle cx="${f1(x)}" cy="${f1(y)}" r="11" class="${fCls(n)} gap"/><text x="${f1(lx)}" y="${f1(ly)}" dy="0.35em" text-anchor="middle" class="t-strong">${n}</text>`;
+  }).join('');
+  const center = (l1, l2) => `<text x="${CX}" y="${CY - 9}" text-anchor="middle" class="t-muted">${l1}</text><text x="${CX}" y="${CY + 11}" text-anchor="middle" class="t-muted">${l2}</text>`;
+  const tally = (title, rows, y0) => `<text x="${X0}" y="${y0}" class="t-strong">${title}</text>` + rows.map((r, i) => {
+    const y = y0 + 30 + i * 30;
+    return `<circle cx="${X0 + 7}" cy="${y}" r="7" class="${fCls(r.node)}"/><text x="${X0 + 24}" y="${y}" dy="0.35em" class="t-strong">${r.node}</text><text x="${X0 + 46}" y="${y}" dy="0.35em" class="t-num">${r.text}</text>`;
+  }).join('');
+  const bars = (title, rows, y0) => {
+    const K = 2.6, bx = X0 + 22, even = 100 / rows.length, xe = bx + even * K, yb = y0 + 22 + rows.length * 30;
+    return `<text x="${X0}" y="${y0}" class="t-strong">${title}</text>` +
+      `<line x1="${f1(xe)}" y1="${y0 + 12}" x2="${f1(xe)}" y2="${yb - 6}" stroke-dasharray="3 3" class="s-line"/>` +
+      `<text x="${f1(xe)}" y="${yb + 8}" text-anchor="middle" class="t-muted t-small">均分 ${even.toFixed(0)}%</text>` +
+      rows.map((r, i) => {
+        const y = y0 + 22 + i * 30, w = Math.max(6, r.pct * K);
+        return `<text x="${X0}" y="${y + 9}" dy="0.35em" class="t-strong">${r.node}</text>` +
+          `<path d="M${bx} ${y} h${f1(w - 4)} a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h${f1(4 - w)} z" class="${fCls(r.node)}"><title>${r.node}：${r.pct.toFixed(1)}%</title></path>` +
+          `<text x="${f1(bx + w + 8)}" y="${y + 9}" dy="0.35em" class="t-num">${r.pct.toFixed(0)}%</text>`;
+      }).join('');
+  };
+  const buckets = (n, prev) => {
+    const bw = (600 - 12 * (n - 1)) / n, per = Math.max(1, Math.floor((bw - 12) / 46)), ox = (bw - (per * 46 - 6)) / 2;
+    let out = `<text x="20" y="58" class="t-strong t-mono">hash(key) % ${n}</text>`;
+    for (let b = 0; b < n; b++) {
+      const x = 20 + b * (bw + 12);
+      out += `<text x="${f1(x + bw / 2)}" y="92" text-anchor="middle" class="t-muted">机器 ${b}</text>` +
+        `<rect x="${f1(x)}" y="102" width="${f1(bw)}" height="130" rx="10" stroke-width="1.5" class="tint s-line"/>`;
+      keyHash.map((h, i) => ({k: 'k' + (i + 1), h})).filter(o => o.h % n === b).forEach((o, i) => {
+        const hot = prev && o.h % prev !== b, cx = x + ox + (i % per) * 46, cy = 114 + Math.floor(i / per) * 30;
+        out += `<rect x="${f1(cx)}" y="${cy}" width="40" height="22" rx="6" stroke-width="${hot ? 2 : 1}" class="${hot ? 'hot-soft s-hot' : 'panel s-line'}"/>` +
+          `<text x="${f1(cx + 20)}" y="${cy + 11}" dy="0.35em" text-anchor="middle" class="t-small">${o.k}</text>`;
+      });
+    }
+    return out;
+  };
+  const hotLegend = (x, y, text) => `<circle cx="${x + 10}" cy="${y}" r="10.5" fill="none" stroke-width="2" class="s-hot"/><circle cx="${x + 10}" cy="${y}" r="5.5" class="hot gap"/><text x="${x + 30}" y="${y}" dy="0.35em">${text}</text>`;
+
+  return {
+    lang: 'zh-CN',
+    id: 'consistent-hashing',
+    title: '一致性哈希',
+    oneLine: '把数据分到多台机器上的一种办法：机器增减时，只需要搬动很少的数据。',
+    depth: '能验',
+    minutes: 40,
+    updated: '2026-11-16',
+
+    scope: {
+      is: '把键分配给一组节点的一种办法。节点增加或减少时，只有一小部分键需要换节点。',
+      isNot: '不是「数据一致性」。名字里的一致，指的是键和节点的对应关系稳定，和副本之间的数据是否相同无关。',
+      why: '用 `hash(key) % N` 分配时，N 一变，绝大多数键都要换节点：缓存会集体失效，存储要大规模搬迁。',
+      where: '分布式缓存和存储里「一个键该去哪个节点」这一层。上游是客户端或代理，下游是存数据的节点。',
+      applies: '适合节点会增减的集群。节点数固定不变，或者需要按范围查询的场景，用不着它。',
+      stop: '能讲清为什么只搬一小段；看到一个分片方案，能判断该不该用它，有没有考虑负载不均和热点。',
+      core: ['哈希环', '顺时针找节点', '增减节点只影响相邻一段', '虚拟节点', '适用边界'],
+      edge: ['有界负载', 'Rendezvous 哈希', 'Jump 哈希', '副本怎么放'],
+      out: ['某个具体库的 API', '哈希函数怎么选', '数据迁移的工程实现'],
+      prereqs: [
+        {name: '哈希函数', primer: '把任意输入变成一个固定范围内的数。同样的输入永远得到同样的数，不同的输入得到的数看起来是随机散开的。'},
+        {name: '取模分片', primer: '用 `hash(key) % N` 决定一个键去第几台机器，N 是机器数。'}
+      ]
+    },
+
+    map: {
+      nodes: [
+        {id: 'key', label: '键', col: 0, row: 0, note: '要存取的数据的名字，比如 `user:42`。'},
+        {id: 'hash', label: '哈希函数', col: 1, row: 0, kind: 'prereq', note: '把键和节点的名字都变成环上的一个位置。'},
+        {id: 'node', label: '节点', col: 2, row: 0, note: '存数据的机器。'},
+        {id: 'change', label: '节点增减', col: 0, row: 1, kind: 'core', note: '加入或移走一个节点，只改变它和前一个节点之间那一段的归属。'},
+        {id: 'ring', label: '哈希环', col: 1, row: 1, kind: 'core', note: '把哈希值的范围首尾相接，看成一个圆。键和节点都落在这个圆上。'},
+        {id: 'rule', label: '顺时针规则', col: 2, row: 1, kind: 'core', note: '一个键，归它顺时针方向遇到的第一个节点。'},
+        {id: 'skew', label: '负载不均', col: 1, row: 2, note: '节点少的时候，它们在环上的位置是随机的，各自管的弧长可能差好几倍。'},
+        {id: 'vnode', label: '虚拟节点', col: 2, row: 2, kind: 'core', note: '让一个节点在环上占很多个点，各个节点管的弧长加起来就接近了。'}
+      ],
+      edges: [
+        {from: 'key', to: 'hash', label: '算位置'},
+        {from: 'node', to: 'hash', label: '算位置'},
+        {from: 'hash', to: 'ring', label: '落在'},
+        {from: 'ring', to: 'rule', label: '在环上找'},
+        {from: 'change', to: 'ring', label: '只改一小段'},
+        {from: 'ring', to: 'skew', label: '位置随机'},
+        {from: 'skew', to: 'vnode', label: '用它缓解'},
+        {from: 'vnode', to: 'rule', label: '规则不变'}
+      ]
+    },
+
+    bridge: {
+      intro: '你多半已经用过取模分片。一致性哈希解决的是同一个问题，只是换了一条规则。',
+      pairs: [
+        {known: '取模分片：`hash(key) % N`', new: '哈希环：顺时针找第一个节点',
+         same: '都是先对键做哈希，再由哈希值决定去哪个节点。', differ: '取模的结果依赖 N，N 一变几乎全变。环上的归属只取决于相邻的节点。'},
+        {known: '环线公交：上车后坐到下一站', new: '键沿着环走到第一个节点',
+         same: '都是沿固定方向找最近的下一个。', differ: '公交站是人排好的，间隔均匀。节点的位置是哈希算出来的，间隔可能差很多。'},
+        {known: '轮询：请求轮流发给每台机器', new: '同一个键每次都去同一个节点',
+         same: '都在把压力分摊到多台机器上。', differ: '轮询不看请求内容，同一个键可能每次去不同的机器，所以不能用来定位数据。'}
+      ],
+      predict: {
+        q: '3 台机器用取模分片，加到 4 台。大约有多少比例的键要换机器？',
+        a: `约四分之三。一个键想留在原地，需要 \`h % 3\` 和 \`h % 4\` 恰好相等，这只有 1/4 的可能。本页用 1 万个键实算，换机器的占 ${movedModPct}%。`
+      }
+    },
+
+    demos: [
+      {
+        title: '换一条规则，要搬的数据差多少',
+        kind: 'frames',
+        steps: [
+          {svg: svg('取模分片：12 个键分到 3 台机器', buckets(3) + `<text x="20" y="269" dy="0.35em" class="t-muted">12 个键，按余数分到 3 台机器</text>`),
+           caption: '先看取模。12 个键，`hash(key) % 3` 的结果决定各自去哪台机器。'},
+          {ask: '加一台机器，规则变成 `% 4`。这 12 个键里，有几个要换机器？',
+           svg: svg('加到 4 台后，大部分键换了机器', buckets(4, 3) + `<rect x="20" y="258" width="40" height="22" rx="6" stroke-width="2" class="hot-soft s-hot"/><text x="70" y="269" dy="0.35em">换了机器：12 个里有 ${movedMod} 个</text>`),
+           caption: `红框是换了机器的键：12 个里有 ${movedMod} 个。换成 1 万个键实算，是 ${movedModPct}%。如果这是缓存，等于几乎全部失效。`},
+          {ask: '换个办法：把机器和键都放到一个圆上，每个键归顺时针方向遇到的第一台机器。这样分，三台机器管的键一样多吗？',
+           svg: svg('哈希环：三个节点各管一段弧', arcs(r3, 0.012) + keyDots() + nodeMarks(ABC) + center('3 个节点', '12 个键') +
+             tally('12 个键归谁', ABC.map(n => ({node: n, text: k3[n] + ' 个键'})), 96) +
+             `<text x="${X0}" y="248" class="t-muted t-small">弧的颜色：这段弧归哪个节点</text><text x="${X0}" y="266" class="t-muted t-small">黑点：键</text>`),
+           caption: `A、B、C 三个节点和 12 个键都落在同一个环上。每一段弧上的键，归这段弧顺时针尽头的那个节点。并不一样多：A 管 ${k3.A} 个，B 管 ${k3.B} 个，C 管 ${k3.C} 个。`},
+          {ask: '现在加入节点 D。哪些键要换节点？',
+           svg: svg('加入 D：只有一段弧换了主人', arcs(r4, 0.012) + keyDots(moved) + nodeMarks(ABCD) + center('加入 D', '') +
+             tally('加入 D 之后', ABCD.map(n => ({node: n, text: k4[n] + ' 个键' + (k4[n] !== (k3[n] || 0) ? '（' + (k4[n] > (k3[n] || 0) ? '+' : '−') + Math.abs(k4[n] - (k3[n] || 0)) + '）' : '')})), 80) +
+             hotLegend(X0, 250, '换了节点的键')),
+           caption: `D 只从 ${movedFrom} 手里接走了自己身后那一段弧。12 个键里只有 ${movedRing} 个换了节点，其余的原地不动。1 万个键实算，换节点的占 ${movedRingPct}%；平均来说是 1/4，具体多少取决于 D 落在哪。`},
+          {ask: '回到三个节点。它们各自承担的比例，会接近三分之一吗？',
+           svg: svg('三个节点承担的比例差很多', arcs(r3, 0.012) + keyDots() + nodeMarks(ABC) + center('每个节点', '1 个点') + bars('1 万个键的分布', p1, 106)),
+           caption: `不会。节点的位置是哈希算出来的，三段弧长差很多：1 万个键里，${list(p1)}。最多和最少差了 ${spread(p1)} 个百分点。`},
+          {ask: '不换哈希函数，有什么办法让三个节点管的弧长接近？',
+           svg: svg('虚拟节点：每个节点占很多个点，比例接近均分', arcs(r16, 0.006) + keyDots() + center('每个节点', '16 个点') + bars('每个节点 16 个点', p16, 56) + bars('每个节点 128 个点', p128, 204)),
+           caption: `让每个节点在环上占很多个点，这就是虚拟节点。每个节点 16 个点时是 ${list(p16)}；128 个点时是 ${list(p128)}。代价是环上的点变多，查找和元数据都更重。`}
+        ]
+      },
+      {
+        title: '一次读请求怎么找到节点',
+        kind: 'sequence',
+        actors: ['客户端', '路由层', '节点 ' + hopFrom, '节点 D'],
+        steps: [
+          {from: '客户端', to: '路由层', label: `get(${hop})`, caption: '客户端要读一个键。它不需要知道数据在哪台机器上。'},
+          {from: '路由层', to: '路由层', label: '算哈希，顺时针找', caption: `路由层算出这个键在环上的位置，顺时针遇到的第一个节点是 ${hopFrom}。整个过程只用到本地的一份节点列表，不用问任何人。`},
+          {from: '路由层', to: '节点 ' + hopFrom, label: '读', caption: `请求发给 ${hopFrom}。`},
+          {from: '节点 ' + hopFrom, to: '客户端', label: '返回数据', caption: `${hopFrom} 返回数据。`},
+          {ask: 'D 加入之后，同一个键再来一次，会去哪？', from: '路由层', to: '路由层', label: 'D 加入，再找一次',
+           caption: '这个键正好落在 D 接管的那一段弧上，顺时针遇到的第一个节点变成了 D。'},
+          {from: '路由层', to: '节点 D', label: '读', caption: `请求发给 D。如果是缓存，D 上还没有这条数据，这是一次未命中；如果是存储，得先把这一段的数据从 ${hopFrom} 搬到 D。`}
+        ]
+      }
+    ],
+
+    explain: [
+      {prompt: '用三四句话讲清：为什么加一台机器，取模分片要搬大部分数据，而哈希环只搬一小段？',
+       points: [
+         '取模的结果依赖机器数 N，N 变了，几乎所有键的余数都会变。',
+         '环上一个键归谁，只取决于它顺时针遇到的第一个节点，和节点总数无关。',
+         '新节点只接管它和前一个节点之间的那一段弧，其余的弧不受影响。',
+         '平均搬动的比例大约是 1/(N+1)。'
+       ]},
+      {prompt: '虚拟节点解决了什么问题，没解决什么问题，代价是什么？',
+       points: [
+         '解决：节点少时位置随机造成的负载不均。',
+         '解决：一个节点下线时，负载全部压给顺时针的下一个节点。',
+         '没解决：热点键。它拉平的是键的数量，不是访问量。',
+         '代价：环上的点变多，查找和元数据的成本更高。'
+       ]}
+    ],
+
+    practice: {
+      quiz: [
+        {q: '环上有 A、B、C 三个节点，没有用虚拟节点。B 下线了，哪些键要换节点？',
+         options: [
+           {text: '所有的键', why: '那是取模分片的情况。环上的归属只和相邻节点有关，A 和 C 原来管的键不受影响。'},
+           {text: '原来归 B 的键，全部交给顺时针方向的下一个节点', correct: true, why: 'B 管的那段弧并进了下一个节点的弧。这也意味着那个节点的负载会突然变重。'},
+           {text: '原来归 B 的键，平均分给 A 和 C', why: '没有虚拟节点时，B 只有一段弧，它整段并给顺时针的下一个节点。用了虚拟节点，B 的很多小段才会分散出去。'},
+           {text: '不需要换', why: 'B 不在了，原来归它的键必须有新的去处。'}
+         ]},
+        {q: '用了虚拟节点之后，下面哪件事仍然会发生？',
+         options: [
+           {text: '节点少的时候，各节点管的键数量差好几倍', why: '这正是虚拟节点缓解的问题。'},
+           {text: '一个访问量特别大的键，把它所在的那台机器打满', correct: true, why: '虚拟节点让每台机器管的键的数量接近，管不了单个键的访问量。热点键要另外处理。'},
+           {text: '加一台机器，大部分键要换节点', why: '不会。只搬一小部分，这是一致性哈希本身的性质，和虚拟节点无关。'}
+         ]},
+        {q: '下面哪种情况，用取模分片就够了？',
+         options: [
+           {text: '缓存集群每周都要扩缩容', why: '每次扩缩容，取模分片都会让大部分缓存失效。一致性哈希正是为这种情况准备的。'},
+           {text: '节点经常因为故障下线又恢复', why: '节点上下线，等于 N 在变，取模每次都要重新洗牌。'},
+           {text: '集群固定 8 台机器，几年不变，数据随时可以全量重建', correct: true, why: '节点数不变，取模的缺点根本不会出现。多引入一个环，只是多了一样要维护的东西。'}
+         ]}
+      ],
+      tasks: [
+        {task: '环上有 4 个节点，加到 5 个。平均要搬多少比例的键？如果是取模分片，从 4 台加到 5 台呢？',
+         hints: ['新节点接管的是环上的哪一部分？平均占整个环的多少？', '取模时，一个键留在原地的条件是 `h % 4` 和 `h % 5` 相等。'],
+         answer: '环：新节点平均接管环的 1/5，所以平均搬 **1/5**。取模：留在原地的可能只有 1/5，所以要搬 **4/5**。'},
+        {task: '缓存集群有 3 台机器，其中一台的内存是另外两台的两倍。怎么让它多承担一些键？',
+         hints: ['一个节点在环上管多少，取决于它占了多少个点。'],
+         answer: '给它**两倍数量的虚拟节点**。每个节点管的弧长大致和它的点数成正比，点数按容量加权就行。'},
+        {task: '一个缓存集群用了一致性哈希，没用虚拟节点。一台机器宕机后，它在环上的下一台很快也被打挂，接着是再下一台。为什么？怎么缓解？',
+         hints: ['宕机那台机器管的键，去了哪里？', '接手的那台机器，原本就有自己的负载。'],
+         answer: '宕机节点的整段弧并给了顺时针的下一个节点，后者的负载突然大增，撑不住就也挂掉，于是更长的一段弧压向再下一个，形成连锁。缓解：用**虚拟节点**把宕机节点的负载分散给所有节点；给每个节点设**负载上限**，超了就顺延到下一个；再配合限流。'}
+      ]
+    },
+
+    limits: {
+      fails: [
+        {when: '节点数固定，很少变化', then: '它要解决的问题并不存在，环只是多出来的复杂度', instead: '直接取模，或者一张固定的分片表'},
+        {when: '有访问量特别大的热点键', then: '它拉平的是键的数量，不是流量，热点键照样压在一台机器上', instead: '本地缓存、把热点键拆开，或者给热点单独加副本'},
+        {when: '需要按范围查询', then: '哈希把相邻的键打散到了各个节点，范围查询要问遍所有节点', instead: '按键的范围分片'},
+        {when: '节点很少，又没用虚拟节点', then: '负载可能差好几倍，一台宕机还可能压垮邻居', instead: '加虚拟节点，或者用带负载上限的变体'}
+      ],
+      myths: [
+        {myth: '一致性哈希能保证数据一致。', truth: '名字里的一致，说的是键和节点的对应关系稳定。副本之间的数据是否一致，是复制协议的事。'},
+        {myth: '用了一致性哈希，加节点就不用搬数据了。', truth: '要搬，只是只搬新节点接管的那一段，而不是几乎全部。'},
+        {myth: '一致性哈希能让负载均匀。', truth: '不保证。节点少时各段弧长差很多，要靠虚拟节点拉平。而且它拉平的是键的数量，不是访问量。'}
+      ],
+      deeper: [
+        {label: '原始论文', note: 'Karger 等人 1997 年提出，最初是为了解决网页缓存的分配问题。'},
+        {label: 'Dynamo 论文（2007）', note: '讲分区的部分，说明了虚拟节点在真实系统里怎么用。'},
+        {label: '替代方案', note: 'Rendezvous 哈希和 Jump 哈希解决的是同一个问题，各有取舍，可以对比着看。'}
+      ]
+    },
+
+    retain: {
+      card: [
+        '节点和键用同一个哈希函数，落在同一个{{环}}上。',
+        '一个键，归它{{顺时针}}方向遇到的第一个节点。',
+        '加一个节点，只搬它和{{前一个节点}}之间的那一段。',
+        '节点少时各段弧长差很多，用{{虚拟节点}}拉平。',
+        '它拉平的是键的数量，管不了{{热点键}}。',
+        '节点数固定不变时，用{{取模}}就够了。'
+      ],
+      review: [1, 7, 30]
+    },
+
+    checks: [
+      {claim: '取模分片从 3 台加到 4 台，约 3/4 的键换机器', status: '已验证', how: `本页用 1 万个键实算：${movedModPct}%。`},
+      {claim: '环上加一个节点，只有新节点接管的那一段换节点', status: '已验证', how: `本页实算：1 万个键里 ${movedRingPct}% 换了节点，全部来自节点 ${movedFrom}。`},
+      {claim: '虚拟节点越多，各节点承担的比例越接近', status: '已验证', how: `本页实算：每个节点 1、16、128 个点时，最多和最少分别差 ${spread(p1)}、${spread(p16)}、${spread(p128)} 个百分点。`},
+      {claim: '加一个节点，平均搬动 1/(N+1) 的键', status: '通用知识', how: '由对称性可得。本页只算了一组位置，没有对很多组随机位置取平均。'},
+      {claim: '图里节点和键的位置', status: '已验证', how: '全部由页面里的哈希函数算出。为了让图看得清，节点名和键名的后缀是挑过的。'},
+      {claim: '原始论文、Dynamo 论文、替代方案', status: '通用知识', how: '凭已有知识写的，这次没有重新打开原文核对。'}
+    ]
+  };
+})();
+</script>
+
+<script>
+/* ============ 引擎：不用改 ============ */
+(function(){
+'use strict';
+const D = (typeof LESSON === 'object' && LESSON) ? LESSON : null;
+const $ = (q, r) => (r || document).querySelector(q);
+const NS = 'http://www.w3.org/2000/svg';
+let uidN = 0;
+const uid = p => p + (++uidN);
+
+function h(tag, attrs, ...kids){
+  const n = document.createElement(tag);
+  if (attrs) for (const k in attrs){
+    const v = attrs[k];
+    if (v == null || v === false) continue;
+    if (k === 'class') n.className = v;
+    else if (k === 'html') n.innerHTML = v;
+    else if (k === 'text') n.textContent = v;
+    else if (k.slice(0, 2) === 'on' && typeof v === 'function') n.addEventListener(k.slice(2), v);
+    else if (v === true) n.setAttribute(k, '');
+    else n.setAttribute(k, v);
+  }
+  for (const c of kids.flat()){
+    if (c == null || c === false) continue;
+    n.append(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  return n;
+}
+function s(tag, attrs, ...kids){
+  const n = document.createElementNS(NS, tag);
+  if (attrs) for (const k in attrs){ if (attrs[k] != null) n.setAttribute(k, attrs[k]); }
+  for (const c of kids.flat()){
+    if (c == null) continue;
+    n.append(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  return n;
+}
+function esc(x){
+  return String(x == null ? '' : x).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+/* 行内只认三样：**粗体**、`代码`、换行 */
+function fmt(x){
+  return esc(x).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>');
+}
+
+/* ---------- 本地记录（只存在这个浏览器里） ---------- */
+const KEY = 'learn-page:' + ((D && (D.id || D.title)) || 'untitled');
+let st = {done:{}, text:{}, finished:null, reviewed:[]};
+try {
+  const raw = localStorage.getItem(KEY);
+  if (raw){ const o = JSON.parse(raw); if (o && typeof o === 'object') st = Object.assign(st, o); }
+} catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} };
+const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const addDays = (str, n) => { const p = str.split('-').map(Number); const x = new Date(p[0], p[1] - 1, p[2]); x.setDate(x.getDate() + n); return x; };
+const reviewDays = () => (D.retain && D.retain.review && D.retain.review.length) ? D.retain.review : [1, 7, 30];
+
+/* ---------- 八个阶段 ---------- */
+const STAGES = [
+  {key:'scope',    n:1, name:'定界', phase:'看清', q:'它是什么，不是什么，这次学到哪为止？', pass:'能说出这次学什么、不学什么、学到什么程度就停。', render:renderScope},
+  {key:'map',      n:2, name:'全景', phase:'看清', q:'它由哪几块组成，彼此是什么关系？', pass:'合上页面，能画出主要的几块和它们之间的关系。', render:renderMap},
+  {key:'bridge',   n:3, name:'连旧', phase:'看懂', q:'它像你已经会的什么，哪里不像？', pass:'能说出一处一样、一处不一样。', render:renderBridge},
+  {key:'demos',    n:4, name:'演示', phase:'看懂', q:'一个具体的例子，从头到尾是怎么走的？', pass:'点下一步之前，能猜到会发生什么。', render:renderDemos},
+  {key:'explain',  n:5, name:'讲回', phase:'会用', q:'不看资料，你能用自己的话讲清楚吗？', pass:'讲回覆盖了大部分要点。', render:renderExplain},
+  {key:'practice', n:6, name:'动手', phase:'会用', q:'换一个没见过的情况，你还会吗？', pass:'至少独立做出一道没见过的题。', render:renderPractice},
+  {key:'limits',   n:7, name:'探边', phase:'留住', q:'它什么时候不成立，代价是什么？', pass:'能说出两种它不适用的情况。', render:renderLimits},
+  {key:'retain',   n:8, name:'留存', phase:'留住', q:'一个月后，你还讲得出来吗？', pass:'隔 1 天、1 周、1 个月回来，仍然能讲回。', render:renderRetain}
+];
+const has = v => Array.isArray(v) ? v.length > 0 : !!v;
+const present = D ? STAGES.filter(g => has(D[g.key])) : [];
+
+function boot(){
+  if (!D){
+    $('#stages').append(h('div', {class:'err', text:'没有读到这一页的内容。数据块（const LESSON = …）缺失，或者里面有语法错误。打开浏览器控制台能看到出错的位置。'}));
+    return;
+  }
+  document.documentElement.lang = D.lang || 'zh-CN';
+  renderTop();
+  renderRail();
+  const host = $('#stages');
+  for (const g of present){
+    const sec = buildStage(g);
+    host.append(sec);
+    try { g.render($('.stage-body', sec), D[g.key]); }
+    catch (e) {
+      $('.stage-body', sec).append(h('div', {class:'err', text:'这一段没能画出来：' + (e && e.message || e)}));
+      if (window.console) console.error(e);
+    }
+  }
+  renderFoot();
+  renderNotice();
+  updateRail();
+  watchScroll();
+  const problems = validate();
+  window.__lessonProblems = problems;
+  if (problems.length) $('#notice').prepend(h('div', {class:'err', text:'这一页的数据有问题：\n· ' + problems.join('\n· ')}));
+}
+
+function renderTop(){
+  $('#top').append(
+    h('div', {class:'kicker', text:'学习页'}),
+    h('h1', {text:D.title || '未命名'}),
+    D.oneLine ? h('p', {class:'lede', html:fmt(D.oneLine)}) : null,
+    h('div', {class:'meta'},
+      D.depth ? h('span', {class:'tag', html:'目标深度 <b>' + esc(D.depth) + '</b>'}) : null,
+      D.minutes ? h('span', {class:'tag', html:'大约 <b>' + esc(D.minutes) + ' 分钟</b>'}) : null,
+      D.updated ? h('span', {class:'tag', html:'更新于 <b>' + esc(D.updated) + '</b>'}) : null));
+}
+
+function renderRail(){
+  const ol = h('ol');
+  for (const g of present){
+    ol.append(h('li', null, h('a', {href:'#s-' + g.key, 'data-key':g.key, onclick:e => { e.preventDefault(); jump(g.key); }},
+      h('span', {class:'no', text:String(g.n)}), h('em', {text:g.name}))));
+  }
+  $('#rail').append(ol, h('span', {class:'rail-count', id:'rail-count'}));
+}
+function updateRail(){
+  let n = 0;
+  for (const g of present){
+    const a = $('#rail a[data-key="' + g.key + '"]'), d = !!st.done[g.key];
+    a.classList.toggle('done', d);
+    a.setAttribute('aria-label', g.name + (d ? '（已过关）' : ''));
+    if (d) n++;
+  }
+  $('#rail-count').textContent = n + ' / ' + present.length + ' 过关';
+}
+function jump(key){
+  const t = $('#s-' + key);
+  const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (t) t.scrollIntoView({behavior: calm ? 'auto' : 'smooth', block:'start'});
+}
+function watchScroll(){
+  if (!('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver(es => {
+    for (const e of es){
+      if (!e.isIntersecting) continue;
+      document.querySelectorAll('#rail a').forEach(a => a.classList.toggle('here', a.dataset.key === e.target.dataset.key));
+    }
+  }, {rootMargin:'-25% 0px -65% 0px'});
+  document.querySelectorAll('.stage').forEach(x => io.observe(x));
+}
+
+function buildStage(g){
+  const id = 'pass-' + g.key;
+  const cb = h('input', {type:'checkbox', id:id});
+  cb.checked = !!st.done[g.key];
+  cb.addEventListener('change', () => { st.done[g.key] = cb.checked; save(); updateRail(); });
+  return h('section', {class:'stage', id:'s-' + g.key, 'data-key':g.key},
+    h('header', {class:'stage-head'},
+      h('span', {class:'stage-no', text:String(g.n), 'aria-hidden':'true'}),
+      h('div', null, h('h2', null, g.name, h('small', {text:g.phase})), h('p', {class:'stage-q', text:g.q}))),
+    h('div', {class:'stage-body'}),
+    h('footer', {class:'stage-foot'}, h('label', {class:'pass', for:id}, cb, h('span', null, h('b', {text:'过关标准：'}), g.pass))));
+}
+
+/* ---------- 1 定界 ---------- */
+function renderScope(body, d){
+  const facts = [['是什么', d.is], ['不是什么', d.isNot], ['为什么有它', d.why], ['它在哪', d.where], ['管到哪', d.applies], ['学到哪为止', d.stop]].filter(x => x[1]);
+  if (facts.length) body.append(h('dl', {class:'facts'}, facts.map(f => h('div', {class:'fact'}, h('dt', {text:f[0]}), h('dd', {html:fmt(f[1])})))));
+  const chips = a => h('div', {class:'chips'}, (a || []).map(x => h('span', {class:'chip', html:fmt(x)})));
+  if (has(d.core) || has(d.edge) || has(d.out)){
+    body.append(h('figure', null,
+      h('div', {class:'ring ring-out'},
+        h('div', {class:'ring-label'}, '圈外', h('span', {text:'这次不碰'})), chips(d.out),
+        h('div', {class:'ring ring-edge'},
+          h('div', {class:'ring-label'}, '圈边', h('span', {text:'知道有就行'})), chips(d.edge),
+          h('div', {class:'ring ring-core'},
+            h('div', {class:'ring-label'}, '圈内', h('span', {text:'这次要学会'})), chips(d.core)))),
+      h('figcaption', {text:'边界图：越往里越要学会，越往外越可以放心不管。'})));
+  }
+  if (has(d.prereqs)){
+    body.append(h('div', {class:'prereqs'}, h('div', {class:'sub', text:'前置知识'}),
+      d.prereqs.map(p => h('details', {class:'pre'}, h('summary', null, p.name, h('small', {text:'不熟就点开'})), h('p', {html:fmt(p.primer || '')})))));
+  }
+}
+
+/* ---------- 画关系图：节点放在格子里，连线带文字 ---------- */
+function wrap2(t){
+  t = String(t);
+  if (t.indexOf('\n') >= 0) return t.split('\n').slice(0, 2);
+  const wide = c => c.charCodeAt(0) > 255 ? 1 : 0.56;
+  const total = Array.from(t).reduce((a, c) => a + wide(c), 0);
+  if (total <= 8.2) return [t];
+  const sp = t.lastIndexOf(' ', Math.ceil(t.length / 2) + 2);
+  if (sp > 0) return [t.slice(0, sp), t.slice(sp + 1)];
+  let acc = 0, cut = 0;
+  for (const c of Array.from(t)){ if (acc >= total / 2) break; acc += wide(c); cut += c.length; }
+  return [t.slice(0, cut), t.slice(cut)];
+}
+function arrowDefs(id, cls){
+  const defs = s('defs');
+  for (const kind of ['', 'on']){
+    defs.append(s('marker', {id:id + '-a' + kind, viewBox:'0 0 10 10', refX:'8.5', refY:'5', markerWidth:'7', markerHeight:'7', orient:'auto'},
+      s('path', {d:'M0 0.8 L9.5 5 L0 9.2 z', class:cls + (kind ? ' on' : '')})));
+  }
+  return defs;
+}
+function drawGraph(host, nodes, edges, opt){
+  opt = opt || {}; nodes = nodes || []; edges = edges || [];
+  const CW = 204, CH = 96, NW = 126, NH = 48, PAD = 12;
+  const cols = Math.max.apply(null, nodes.map(n => n.col || 0).concat(0)) + 1;
+  const rows = Math.max.apply(null, nodes.map(n => n.row || 0).concat(0)) + 1;
+  const W = PAD * 2 + cols * CW, H = PAD * 2 + rows * CH, id = uid('g');
+  const svg = s('svg', {viewBox:'0 0 ' + W + ' ' + H, width:W, height:H, role:'img', 'aria-label':opt.label || '关系图'});
+  svg.append(arrowDefs(id, 'g-arrow'));
+  const pos = {};
+  nodes.forEach(n => { pos[n.id] = {x:PAD + (n.col || 0) * CW + CW / 2, y:PAD + (n.row || 0) * CH + CH / 2}; });
+  const eg = s('g'), ng = s('g');
+  svg.append(eg, ng);
+  const edgeEls = [], nodeEls = {};
+  edges.forEach(e => {
+    const a = pos[e.from], b = pos[e.to];
+    if (!a || !b) return;
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+    const rev = edges.some(o => o !== e && o.from === e.to && o.to === e.from);
+    const ox = rev ? -uy * 10 : 0, oy = rev ? ux * 10 : 0;
+    const t = Math.min((NW / 2) / Math.max(Math.abs(ux), 1e-6), (NH / 2) / Math.max(Math.abs(uy), 1e-6));
+    const x1 = a.x + ux * (t + 2) + ox, y1 = a.y + uy * (t + 2) + oy, x2 = b.x - ux * (t + 5) + ox, y2 = b.y - uy * (t + 5) + oy;
+    const g = s('g', {class:'g-edge'}), ln = s('line', {x1:x1, y1:y1, x2:x2, y2:y2, 'marker-end':'url(#' + id + '-a)'});
+    g.append(ln);
+    if (e.label){
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      g.append(Math.abs(ux) >= Math.abs(uy)
+        ? s('text', {x:mx, y:my - 7, 'text-anchor':'middle'}, e.label)
+        : s('text', {x:mx + 8, y:my + 4, 'text-anchor':'start'}, e.label));
+    }
+    eg.append(g);
+    edgeEls.push({e:e, g:g, ln:ln});
+  });
+  let cur = null;
+  nodes.forEach(n => {
+    const p = pos[n.id], flat = String(n.label).replace(/\n/g, '');
+    const g = s('g', {class:'g-node kind-' + (n.kind || 'support')});
+    g.append(s('rect', {x:p.x - NW / 2, y:p.y - NH / 2, width:NW, height:NH, rx:10}));
+    const lines = wrap2(n.label), tx = s('text', {x:p.x, y:p.y, 'text-anchor':'middle'});
+    lines.forEach((ln, i) => tx.append(s('tspan', {x:p.x, dy:i === 0 ? (lines.length === 1 ? '0.35em' : '-0.3em') : '1.3em'}, ln)));
+    g.append(tx);
+    ng.append(g);
+    nodeEls[n.id] = g;
+    if (opt.onSelect){
+      g.setAttribute('tabindex', '0');
+      g.setAttribute('role', 'button');
+      g.setAttribute('aria-label', flat + (n.note ? '：' + n.note : ''));
+      const pick = () => select(cur === n.id ? null : n.id);
+      g.addEventListener('click', pick);
+      g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); pick(); } });
+    }
+  });
+  function mark(onNodes, onEdges, nearNodes){
+    onNodes = onNodes || []; onEdges = onEdges || []; nearNodes = nearNodes || [];
+    const any = onNodes.length > 0 || onEdges.length > 0;
+    svg.classList.toggle('dimmed', any);
+    nodes.forEach(n => {
+      nodeEls[n.id].classList.toggle('on', any && onNodes.indexOf(n.id) >= 0);
+      nodeEls[n.id].classList.toggle('near', any && nearNodes.indexOf(n.id) >= 0);
+    });
+    edgeEls.forEach(x => {
+      const on = any && onEdges.some(p => p[0] === x.e.from && p[1] === x.e.to);
+      x.g.classList.toggle('on', on);
+      x.ln.setAttribute('marker-end', 'url(#' + id + '-a' + (on ? 'on' : '') + ')');
+    });
+  }
+  function select(nid){
+    cur = nid;
+    if (!nid){ mark(); opt.onSelect(null); return; }
+    const inc = edges.filter(e => e.from === nid || e.to === nid), near = [];
+    inc.forEach(e => near.push(e.from, e.to));
+    mark([nid], inc.map(e => [e.from, e.to]), near);
+    opt.onSelect(nodes.filter(n => n.id === nid)[0]);
+  }
+  host.replaceChildren(svg);
+  return {mark:mark};
+}
+
+/* ---------- 画时序图：角色排成列，消息一步一步出现 ---------- */
+function drawSequence(host, actors, steps, upto){
+  actors = actors || [];
+  const COL = Math.max(150, Math.min(190, Math.floor(770 / Math.max(actors.length, 1)))), PAD = 10, TOP = 6, BH = 34, ROW = 48;
+  const W = PAD * 2 + actors.length * COL, H = TOP + BH + 30 + steps.length * ROW + 6, id = uid('q');
+  const svg = s('svg', {viewBox:'0 0 ' + W + ' ' + H, width:W, height:H, role:'img', 'aria-label':'时序图，共 ' + steps.length + ' 步，现在是第 ' + (upto + 1) + ' 步'});
+  svg.append(arrowDefs(id, 'q-arrow'));
+  const x = i => PAD + i * COL + COL / 2;
+  const at = name => Math.max(0, actors.indexOf(name));
+  actors.forEach((a, i) => {
+    svg.append(s('line', {class:'q-life', x1:x(i), y1:TOP + BH, x2:x(i), y2:H - 4}));
+    svg.append(s('g', {class:'q-actor'},
+      s('rect', {x:x(i) - (COL - 26) / 2, y:TOP, width:COL - 26, height:BH, rx:8}),
+      s('text', {x:x(i), y:TOP + BH / 2, dy:'0.35em', 'text-anchor':'middle'}, a)));
+  });
+  steps.forEach((sp, i) => {
+    if (i > upto) return;
+    const y = TOP + BH + 44 + i * ROW, on = i === upto, ia = at(sp.from), ib = at(sp.to), a = x(ia), b = x(ib);
+    const g = s('g', {class:'q-msg' + (on ? ' on' : '')}), mk = 'url(#' + id + '-a' + (on ? 'on' : '') + ')';
+    const lab = (i + 1) + '. ' + (sp.label || '');
+    if (ia === ib){
+      const right = ia < actors.length - 1 || actors.length === 1, k = right ? 1 : -1;
+      g.append(s('path', {d:'M' + a + ' ' + (y - 12) + ' h' + (34 * k) + ' v20 h' + (-28 * k), 'marker-end':mk}),
+        s('text', {x:a + 42 * k, y:y + 2, 'text-anchor':right ? 'start' : 'end'}, lab));
+    } else {
+      g.append(s('line', {x1:a, y1:y, x2:b - (b > a ? 3 : -3), y2:y, 'marker-end':mk}),
+        s('text', {x:(a + b) / 2, y:y - 8, 'text-anchor':'middle'}, lab));
+    }
+    svg.append(g);
+  });
+  host.replaceChildren(svg);
+}
+
+/* ---------- 2 全景 ---------- */
+function renderMap(body, d){
+  const idle = '点一个方块，看它是什么。';
+  const note = h('p', {class:'node-note', 'aria-live':'polite', text:idle});
+  const fig = h('div', {class:'fig scroll'});
+  drawGraph(fig, d.nodes, d.edges, {label:'概念图', onSelect:n => {
+    if (n) note.innerHTML = '<strong>' + esc(String(n.label).replace(/\n/g, '')) + '</strong>　' + fmt(n.note || '');
+    else note.textContent = idle;
+  }});
+  body.append(h('figure', null, fig, h('figcaption', {text:'粗框是这次的核心，细框是相关概念，虚线框是前置知识。箭头上的字是两者的关系。'})), note);
+}
+
+/* ---------- 先猜后揭晓 ---------- */
+function predictBox(p, key){
+  const id = 'guess-' + key;
+  const inp = h('input', {type:'text', id:id, placeholder:'写下你的猜测，一句话就行，不评分', 'aria-label':'你的猜测'});
+  inp.value = st.text[id] || '';
+  inp.addEventListener('input', () => { st.text[id] = inp.value; save(); });
+  const ans = h('div', {class:'ask-a', hidden:true, html:fmt(p.a)});
+  const btn = h('button', {class:'btn small', type:'button'}, '揭晓');
+  btn.addEventListener('click', () => { ans.hidden = !ans.hidden; btn.textContent = ans.hidden ? '揭晓' : '收起'; });
+  return h('div', {class:'ask'}, h('div', {class:'ask-tag', text:'先猜一下'}), h('div', {class:'ask-q', html:fmt(p.q)}), inp, h('div', null, btn), ans);
+}
+
+/* ---------- 3 连旧 ---------- */
+function renderBridge(body, d){
+  if (d.intro) body.append(h('p', {html:fmt(d.intro)}));
+  if (has(d.pairs)) body.append(h('div', {class:'pairs'}, d.pairs.map(p => h('div', {class:'pair'},
+    h('div', {class:'pair-top'},
+      h('div', {class:'pair-known'}, h('span', {class:'pair-lab', text:'你已经会的'}), h('span', {html:fmt(p.known)})),
+      h('div', {class:'pair-arrow', 'aria-hidden':'true', text:'→'}),
+      h('div', {class:'pair-new'}, h('span', {class:'pair-lab', text:'这里的新东西'}), h('span', {html:fmt(p['new'])}))),
+    h('div', {class:'pair-notes'},
+      h('div', {class:'same', html:'<b>一样</b>　' + fmt(p.same || '')}),
+      h('div', {class:'differ', html:'<b>不一样</b>　' + fmt(p.differ || '')}))))));
+  if (d.predict) body.append(predictBox(d.predict, 'bridge'));
+}
+
+/* ---------- 4 演示 ---------- */
+function renderDemos(body, list){
+  list.forEach(demo => {
+    const steps = demo.steps || [], seen = {0:true};
+    let i = 0, graph = null;
+    const fig = h('div', {class:'fig' + (demo.kind === 'frames' ? '' : ' scroll'), tabindex:'0', 'aria-label':'分步演示，可以用左右方向键切换'});
+    const cap = h('p', {class:'cap', 'aria-live':'polite'});
+    const ask = h('div', {class:'ask', hidden:true});
+    const prev = h('button', {class:'btn', type:'button', onclick:() => go(i - 1)}, '上一步');
+    const next = h('button', {class:'btn primary', type:'button', onclick:() => go(i + 1)}, '下一步');
+    const dots = h('div', {class:'dots', role:'group', 'aria-label':'步骤'},
+      steps.map((_, k) => h('button', {type:'button', 'aria-label':'第 ' + (k + 1) + ' 步', onclick:() => go(k)})));
+    if (demo.kind === 'graph') graph = drawGraph(fig, demo.nodes, demo.edges, {label:demo.title || '演示'});
+    function go(k){ if (k < 0 || k >= steps.length) return; i = k; seen[k] = true; show(); }
+    function show(){
+      const sp = steps[i] || {};
+      if (demo.kind === 'frames') fig.innerHTML = typeof sp.svg === 'function' ? sp.svg() : (sp.svg || '');
+      else if (demo.kind === 'sequence') drawSequence(fig, demo.actors, steps, i);
+      else if (graph) graph.mark(sp.nodes, sp.edges, sp.nodes);
+      cap.innerHTML = '<b>' + (i + 1) + ' / ' + steps.length + '</b>' + fmt(sp.caption || '');
+      const nx = steps[i + 1];
+      ask.hidden = !(nx && nx.ask);
+      if (nx && nx.ask) ask.replaceChildren(h('div', {class:'ask-tag', text:'先猜，再点下一步'}), h('div', {class:'ask-q', html:fmt(nx.ask)}));
+      prev.disabled = i === 0;
+      next.disabled = i === steps.length - 1;
+      Array.from(dots.children).forEach((b, k) => { b.classList.toggle('on', k === i); b.classList.toggle('seen', !!seen[k] && k !== i); });
+    }
+    fig.addEventListener('keydown', ev => {
+      if (ev.key === 'ArrowRight'){ ev.preventDefault(); go(i + 1); }
+      else if (ev.key === 'ArrowLeft'){ ev.preventDefault(); go(i - 1); }
+    });
+    body.append(h('div', {class:'demo'}, demo.title ? h('h3', {text:demo.title}) : null, fig, cap, ask, h('div', {class:'ctl'}, prev, dots, next)));
+    show();
+  });
+}
+
+/* ---------- 5 讲回 ---------- */
+function copyText(text, done){
+  try { navigator.clipboard.writeText(text).then(() => done(true), () => done(false)); }
+  catch (e) { done(false); }
+}
+function renderExplain(body, list){
+  list.forEach((ex, k) => {
+    const key = 'explain-' + k;
+    const ta = h('textarea', {id:key, placeholder:'合上上面的内容，用自己的话写。写不出来的地方，就是还没懂的地方。', 'aria-label':'你的讲回'});
+    ta.value = st.text[key] || '';
+    ta.addEventListener('input', () => { st.text[key] = ta.value; save(); });
+    const cover = h('p', {class:'cover', 'aria-live':'polite'});
+    const rows = (ex.points || []).map((p, j) => {
+      const cb = h('input', {type:'checkbox', id:key + '-p' + j});
+      cb.addEventListener('change', tally);
+      return {cb:cb, row:h('label', {for:key + '-p' + j}, cb, h('span', {html:fmt(p)}))};
+    });
+    function tally(){
+      const n = rows.filter(r => r.cb.checked).length;
+      cover.textContent = '你讲到了 ' + n + ' / ' + rows.length + ' 个要点。' + (n < rows.length ? '没讲到的，回到对应的阶段再看一遍，然后重新讲，不要只是把答案读一遍。' : '');
+    }
+    const pts = h('div', {class:'points', hidden:true}, h('div', {class:'sub', text:'对照要点：你讲到了哪些？'}), rows.map(r => r.row), cover);
+    const show = h('button', {class:'btn', type:'button', onclick:() => { pts.hidden = false; tally(); }}, '写完了，对照要点');
+    const status = h('span', {class:'hint-line', 'aria-live':'polite'});
+    const copy = h('button', {class:'btn', type:'button'}, '复制给 Claude 批改');
+    copy.addEventListener('click', () => {
+      const text = '我在学「' + D.title + '」。\n题目：' + ex.prompt + '\n我的讲回：\n' + (ta.value.trim() || '（还没写）') +
+        '\n\n请批改：指出我讲对了什么、漏了什么、哪里讲错了。先不要直接给标准答案，让我自己再试一次。';
+      copyText(text, ok => { status.textContent = ok ? '已复制，粘贴到对话里。' : '没能自动复制，请手动选中你写的内容。'; });
+    });
+    body.append(h('div', {class:'explain'}, h('p', {class:'prompt', html:fmt(ex.prompt)}), ta, h('div', {class:'ctl'}, show, copy, status), pts));
+  });
+}
+
+/* ---------- 6 动手 ---------- */
+function renderPractice(body, d){
+  if (has(d.quiz)){
+    const score = h('p', {class:'cover', 'aria-live':'polite'});
+    let right = 0, first = 0;
+    body.append(h('div', {class:'quiz'}, d.quiz.map((q, qi) => {
+      const why = h('div', {class:'why', hidden:true, 'aria-live':'polite'});
+      let tries = 0, solved = false;
+      const btns = (q.options || []).map((o, oi) => {
+        const mark = h('span', {class:'mark', text:'ABCDEF'.charAt(oi)});
+        const b = h('button', {class:'opt', type:'button'}, mark, h('span', {html:fmt(o.text)}));
+        b.addEventListener('click', () => {
+          if (solved) return;
+          tries++;
+          why.hidden = false;
+          if (o.correct){
+            solved = true; right++; if (tries === 1) first++;
+            b.classList.add('right'); mark.textContent = '✓';
+            btns.forEach(x => { x.disabled = true; });
+            why.innerHTML = '<strong>对。</strong>' + fmt(o.why || '');
+            score.textContent = '答对 ' + right + ' / ' + d.quiz.length + ' 题，其中 ' + first + ' 题一次答对。';
+          } else {
+            b.classList.add('wrong'); mark.textContent = '✗'; b.disabled = true;
+            why.innerHTML = '<strong>不对。</strong>' + fmt(o.why || '再想想。');
+          }
+        });
+        return b;
+      });
+      return h('div', {class:'qa'}, h('p', {class:'qa-q', html:(qi + 1) + '. ' + fmt(q.q)}), h('div', {class:'opts'}, btns), why);
+    }), score));
+  }
+  if (has(d.tasks)){
+    body.append(h('div', {class:'tasks'}, d.tasks.map((t, ti) => {
+      const key = 'task-' + ti, hints = t.hints || [];
+      let shown = 0;
+      const hintBox = h('div', {class:'reveals'});
+      const hintBtn = hints.length ? h('button', {class:'btn small', type:'button'}, '给个提示') : null;
+      if (hintBtn) hintBtn.addEventListener('click', () => {
+        if (shown < hints.length){ hintBox.append(h('div', {class:'reveal', html:'<strong>提示 ' + (shown + 1) + '</strong>　' + fmt(hints[shown])})); shown++; }
+        if (shown >= hints.length) hintBtn.disabled = true;
+      });
+      const ans = h('div', {class:'reveal', hidden:true, html:'<strong>参考答案</strong>　' + fmt(t.answer || '')});
+      const ansBtn = h('button', {class:'btn small', type:'button'}, '看参考答案');
+      ansBtn.addEventListener('click', () => { ans.hidden = !ans.hidden; ansBtn.textContent = ans.hidden ? '看参考答案' : '收起答案'; });
+      const yes = h('button', {class:'btn small', type:'button'}, '我做出来了'), no = h('button', {class:'btn small', type:'button'}, '没做出来');
+      const paint = () => {
+        yes.classList.toggle('sel', st.text[key] === 'yes'); no.classList.toggle('sel', st.text[key] === 'no');
+        yes.setAttribute('aria-pressed', String(st.text[key] === 'yes')); no.setAttribute('aria-pressed', String(st.text[key] === 'no'));
+      };
+      yes.addEventListener('click', () => { st.text[key] = 'yes'; save(); paint(); });
+      no.addEventListener('click', () => { st.text[key] = 'no'; save(); paint(); });
+      paint();
+      return h('div', {class:'task'}, h('p', {class:'task-t', html:fmt(t.task)}), h('div', {class:'ctl'}, hintBtn, ansBtn), hintBox, ans,
+        h('div', {class:'self'}, '先自己做，再看答案：', yes, no));
+    })));
+  }
+}
+
+/* ---------- 7 探边 ---------- */
+function renderLimits(body, d){
+  if (has(d.fails)) body.append(h('div', {class:'tbl-wrap'}, h('table', null,
+    h('thead', null, h('tr', null, h('th', {text:'在什么情况下'}), h('th', {text:'会怎样'}), h('th', {text:'换什么做法'}))),
+    h('tbody', null, d.fails.map(f => h('tr', null, h('td', {html:fmt(f.when)}), h('td', {html:fmt(f.then)}), h('td', {html:fmt(f.instead || '')})))))));
+  if (has(d.myths)) body.append(h('div', {class:'sub', text:'常见误解：先想想错在哪，再点开'}), h('div', {class:'myths'}, d.myths.map(m => {
+    const b = h('button', {class:'flip', type:'button', 'aria-pressed':'false'});
+    const paint = () => {
+      const open = b.getAttribute('aria-pressed') === 'true';
+      b.replaceChildren(h('span', {class:'lab', text:open ? '其实' : '误解'}), h('span', {html:fmt(open ? m.truth : m.myth)}),
+        h('span', {class:'turn', text:open ? '点一下翻回去' : '点一下看真相'}));
+    };
+    b.addEventListener('click', () => { b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); paint(); });
+    paint();
+    return b;
+  })));
+  if (has(d.deeper)) body.append(h('div', {class:'sub', text:'想再往深走'}),
+    h('ul', {class:'deeper'}, d.deeper.map(x => h('li', {html:'<strong>' + esc(x.label) + '</strong>　' + fmt(x.note || '')}))));
+}
+
+/* ---------- 8 留存 ---------- */
+function renderRetain(body, d){
+  if (has(d.card)){
+    const blanks = [];
+    const setBlank = (b, open) => { b.classList.toggle('open', open); b.textContent = open ? b.dataset.a : '？'; b.setAttribute('aria-label', open ? b.dataset.a : '点开看答案'); };
+    const card = h('ol', {class:'card'}, d.card.map(line => {
+      const li = h('li');
+      String(line).split(/(\{\{.+?\}\})/).forEach(part => {
+        const m = part.match(/^\{\{(.+)\}\}$/);
+        if (m){
+          const b = h('button', {class:'blank', type:'button'});
+          b.dataset.a = m[1];
+          setBlank(b, false);
+          b.addEventListener('click', () => setBlank(b, !b.classList.contains('open')));
+          blanks.push(b);
+          li.append(b);
+        } else if (part) li.append(h('span', {html:fmt(part)}));
+      });
+      return li;
+    }));
+    body.append(h('div', {class:'sub', text:'学习卡：先在心里填空，再点开核对'}), card,
+      h('div', {class:'ctl'},
+        h('button', {class:'btn small', type:'button', onclick:() => blanks.forEach(b => setBlank(b, false))}, '全部遮住'),
+        h('button', {class:'btn small', type:'button', onclick:() => blanks.forEach(b => setBlank(b, true))}, '全部揭开')));
+  }
+  const plan = h('div', {class:'plan-wrap'});
+  body.append(h('div', {class:'sub', text:'复习计划'}), plan);
+  function draw(){
+    plan.replaceChildren();
+    if (!st.finished){
+      plan.append(h('p', {class:'hint-line', text:'学完这一页后点一下，页面会记下日期，告诉你哪天回来。'}),
+        h('div', null, h('button', {class:'btn primary', type:'button', onclick:() => { st.finished = iso(today()); st.reviewed = []; save(); draw(); renderNotice(); }}, '今天学完了')));
+      return;
+    }
+    const now = today(), done = st.reviewed || [];
+    plan.append(h('p', {class:'hint-line', text:'学完于 ' + st.finished + '。复习时只做三件事：讲回、动手里的小测、学习卡。不要重读一遍。'}),
+      h('ol', {class:'plan'}, reviewDays().map((n, k) => {
+        const when = addDays(st.finished, n), isDone = done.indexOf(k) >= 0, due = when <= now;
+        return h('li', null, h('span', {class:'when', text:iso(when)}), h('span', {text:'第 ' + (k + 1) + ' 次，隔 ' + n + ' 天'}),
+          h('span', {class:'pill' + (isDone ? ' ok' : due ? ' due' : ''), text:isDone ? '已复习' : due ? '该复习了' : '还没到'}),
+          (!isDone && due) ? h('button', {class:'btn small', type:'button', onclick:() => { st.reviewed = done.concat(k); save(); draw(); renderNotice(); }}, '这次复习完成') : null);
+      })),
+      h('div', null, h('button', {class:'btn small', type:'button', onclick:() => { st.finished = null; st.reviewed = []; save(); draw(); renderNotice(); }}, '重新计日')));
+  }
+  draw();
+}
+
+/* ---------- 到期提醒与复习模式 ---------- */
+let reviewMode = false;
+function renderNotice(){
+  let box = $('#notice-review');
+  if (!box){ box = h('div', {id:'notice-review'}); $('#notice').append(box); }
+  box.replaceChildren();
+  if (!D.retain || !st.finished) return;
+  const now = today(), days = reviewDays(), done = st.reviewed || [];
+  let k = -1;
+  days.forEach((n, i) => { if (k < 0 && done.indexOf(i) < 0 && addDays(st.finished, n) <= now) k = i; });
+  if (k < 0 && !reviewMode) return;
+  const btn = h('button', {class:'btn', type:'button'}, reviewMode ? '退出复习模式' : '进入复习模式');
+  btn.addEventListener('click', () => {
+    reviewMode = !reviewMode;
+    document.querySelectorAll('.stage').forEach(sec => { sec.hidden = reviewMode && ['explain', 'practice', 'retain'].indexOf(sec.dataset.key) < 0; });
+    renderNotice();
+  });
+  box.append(h('div', {class:'banner'},
+    h('span', {text:reviewMode ? '复习模式：只留下讲回、动手、留存三个阶段。' : '该复习了：第 ' + (k + 1) + ' 次，隔 ' + days[k] + ' 天。'}), btn));
+}
+
+/* ---------- 页脚：内容核对到什么程度 ---------- */
+function renderFoot(){
+  const f = $('#foot');
+  if (has(D.checks)){
+    const cls = {'已验证':' ok', '推测':' due'};
+    f.append(h('div', {class:'sub', text:'这一页的内容核对到什么程度'}), h('div', {class:'tbl-wrap'}, h('table', null,
+      h('thead', null, h('tr', null, h('th', {text:'说法'}), h('th', {text:'状态'}), h('th', {text:'依据'}))),
+      h('tbody', null, D.checks.map(c => h('tr', null, h('td', {html:fmt(c.claim)}),
+        h('td', null, h('span', {class:'pill' + (cls[c.status] || ''), text:c.status || ''})), h('td', {html:fmt(c.how || '')})))))));
+  }
+  f.append(h('p', {class:'hint-line', text:'过关记录、你写的内容和复习日期只保存在这个浏览器里。'}));
+}
+
+/* ---------- 数据自查：有问题就在页面顶部说出来 ---------- */
+function validate(){
+  const out = [];
+  if (!D.title) out.push('缺少 title');
+  if (D.map){
+    const ns = D.map.nodes || [], ids = {}, cells = {};
+    ns.forEach(n => {
+      if (ids[n.id]) out.push('概念图里有重复的节点 id：' + n.id);
+      ids[n.id] = true;
+      const c = (n.col || 0) + ',' + (n.row || 0);
+      if (cells[c]) out.push('概念图里有两个节点占了同一格（列 ' + (n.col || 0) + '，行 ' + (n.row || 0) + '）');
+      cells[c] = true;
+    });
+    (D.map.edges || []).forEach(e => { if (!ids[e.from] || !ids[e.to]) out.push('概念图里的连线 ' + e.from + ' → ' + e.to + ' 指向了不存在的节点'); });
+  }
+  (D.demos || []).forEach((dm, i) => {
+    if (['frames', 'sequence', 'graph'].indexOf(dm.kind) < 0) out.push('演示 ' + (i + 1) + ' 的 kind 只能是 frames、sequence 或 graph');
+    if (!has(dm.steps)) out.push('演示 ' + (i + 1) + ' 没有 steps');
+    if (dm.kind === 'sequence') (dm.steps || []).forEach((sp, k) => {
+      if ((dm.actors || []).indexOf(sp.from) < 0 || (dm.actors || []).indexOf(sp.to) < 0) out.push('演示 ' + (i + 1) + ' 第 ' + (k + 1) + ' 步的 from 或 to 不在 actors 里');
+    });
+  });
+  ((D.practice && D.practice.quiz) || []).forEach((q, i) => {
+    const n = (q.options || []).filter(o => o.correct).length;
+    if (n !== 1) out.push('小测第 ' + (i + 1) + ' 题需要恰好一个正确选项，现在有 ' + n + ' 个');
+  });
+  return out;
+}
+
+boot();
+})();
+</script>

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "be-better-engineers",
+  "version": "0.1.0",
+  "description": "成为更好的工程师：一个按固定流程、以图为主教人学会新东西的 skill。",
+  "author": {
+    "name": "qiaob"
+  },
+  "repository": "https://github.com/qiaob/be-better-engineers"
+}
