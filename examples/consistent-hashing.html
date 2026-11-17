@@ -133,6 +133,8 @@ details.pre p{margin-top:6px;font-size:14.5px}
 .fig svg{display:block;margin:0 auto;max-width:100%;height:auto}
 .fig:not(.scroll) svg{width:100%;min-width:520px}
 .fig.scroll svg{max-width:none}
+.fig .tbl-wrap{border:0;border-radius:0}
+.fig table{font-size:14px}
 .fig text{font-family:var(--sans);font-size:13px;fill:var(--ink)}
 .node-note{min-height:1.7em;font-size:14.5px}
 .g-node{cursor:pointer}
@@ -918,6 +920,13 @@ function renderBridge(body, d){
   if (d.predict) body.append(predictBox(d.predict, 'bridge'));
 }
 
+/* ---------- 对照表：frames 的一步可以是一张表 ---------- */
+function tableEl(t){
+  return h('div', {class:'tbl-wrap'}, h('table', null,
+    h('thead', null, h('tr', null, (t.head || []).map(c => h('th', {html:fmt(c)})))),
+    h('tbody', null, (t.rows || []).map(r => h('tr', null, r.map(c => h('td', {html:fmt(c)})))))));
+}
+
 /* ---------- 4 演示 ---------- */
 function renderDemos(body, list){
   list.forEach(demo => {
@@ -934,7 +943,10 @@ function renderDemos(body, list){
     function go(k){ if (k < 0 || k >= steps.length) return; i = k; seen[k] = true; show(); }
     function show(){
       const sp = steps[i] || {};
-      if (demo.kind === 'frames') fig.innerHTML = typeof sp.svg === 'function' ? sp.svg() : (sp.svg || '');
+      if (demo.kind === 'frames') {
+        if (sp.table) fig.replaceChildren(tableEl(sp.table));
+        else fig.innerHTML = typeof sp.svg === 'function' ? sp.svg() : (sp.svg || '');
+      }
       else if (demo.kind === 'sequence') drawSequence(fig, demo.actors, steps, i);
       else if (graph) graph.mark(sp.nodes, sp.edges, sp.nodes);
       cap.innerHTML = '<b>' + (i + 1) + ' / ' + steps.length + '</b>' + fmt(sp.caption || '');
@@ -1165,6 +1177,7 @@ function validate(){
   (D.demos || []).forEach((dm, i) => {
     if (['frames', 'sequence', 'graph'].indexOf(dm.kind) < 0) out.push('演示 ' + (i + 1) + ' 的 kind 只能是 frames、sequence 或 graph');
     if (!has(dm.steps)) out.push('演示 ' + (i + 1) + ' 没有 steps');
+    if (dm.kind === 'frames') (dm.steps || []).forEach((sp, k) => { if (!sp.svg && !sp.table) out.push('演示 ' + (i + 1) + ' 第 ' + (k + 1) + ' 步既没有 svg 也没有 table'); });
     if (dm.kind === 'sequence') (dm.steps || []).forEach((sp, k) => {
       if ((dm.actors || []).indexOf(sp.from) < 0 || (dm.actors || []).indexOf(sp.to) < 0) out.push('演示 ' + (i + 1) + ' 第 ' + (k + 1) + ' 步的 from 或 to 不在 actors 里');
     });

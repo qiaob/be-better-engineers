@@ -1,0 +1,15 @@
+version = 8.0.46-0ubuntu0.24.04.5
+默认隔离级别 @@global.transaction_isolation = REPEATABLE-READ
+
+S2 READ UNCOMMITTED A 第 1 次读 100；B 改未提交时 A 第 2 次读 50；B 提交后 A 第 3 次读 50
+S2 READ COMMITTED   A 第 1 次读 100；B 改未提交时 A 第 2 次读 100；B 提交后 A 第 3 次读 50
+S2 REPEATABLE READ  A 第 1 次读 100；B 改未提交时 A 第 2 次读 100；B 提交后 A 第 3 次读 100
+
+S5 READ COMMITTED   A 数 amount>100：2；B 插入一行 200 并提交后 A 再数：3；A 对这些行 UPDATE，影响 3 行；之后 A 再数：3
+S5 REPEATABLE READ  A 数 amount>100：2；B 插入一行 200 并提交后 A 再数：2；A 对这些行 UPDATE，影响 3 行；之后 A 再数：3
+
+S6 READ COMMITTED   A 读 10 写 9 提交；B 读 10 写 9：ok（影响 1 行），COMMIT ok；最终库存 9（应为 8）
+S6 REPEATABLE READ  A 读 10 写 9 提交；B 读 10 写 9：ok（影响 1 行），COMMIT ok；最终库存 9（应为 8）
+
+S10 REPEATABLE READ  各看到 2/2 人值班；A 的 UPDATE ok（影响 1 行）（等了 0.0 秒）；B 的 UPDATE ok（影响 1 行）；COMMIT A ok，B ok；最后还在值班：0 人
+S10 SERIALIZABLE     各看到 2/2 人值班；A 的 UPDATE ok（影响 1 行）（等了 0.5 秒）；B 的 UPDATE ERROR 1213: Deadlock found when trying to get lock; try restarting transaction；COMMIT A ok，B ok（死锁时 B 已被整个回滚，这里的 COMMIT 不提交任何东西）；最后还在值班：1 人

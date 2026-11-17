@@ -1,0 +1,62 @@
+{
+ "PostgreSQL": {
+  "READ UNCOMMITTED": {
+   "dirty": "挡住",
+   "nonrepeatable": "会",
+   "phantom": "会",
+   "lost": "会",
+   "skew": "会"
+  },
+  "READ COMMITTED": {
+   "dirty": "挡住",
+   "nonrepeatable": "会",
+   "phantom": "会",
+   "lost": "会",
+   "skew": "会"
+  },
+  "REPEATABLE READ": {
+   "dirty": "挡住",
+   "nonrepeatable": "挡住",
+   "phantom": "挡住",
+   "lost": "报错",
+   "skew": "会"
+  },
+  "SERIALIZABLE": {
+   "dirty": "挡住",
+   "nonrepeatable": "挡住",
+   "phantom": "挡住",
+   "lost": "报错",
+   "skew": "报错"
+  }
+ },
+ "MySQL": {
+  "READ UNCOMMITTED": {
+   "dirty": "会",
+   "nonrepeatable": "会",
+   "phantom": "会",
+   "lost": "会",
+   "skew": "会"
+  },
+  "READ COMMITTED": {
+   "dirty": "挡住",
+   "nonrepeatable": "会",
+   "phantom": "会",
+   "lost": "会",
+   "skew": "会"
+  },
+  "REPEATABLE READ": {
+   "dirty": "挡住",
+   "nonrepeatable": "挡住",
+   "phantom": "挡住",
+   "lost": "会",
+   "skew": "会"
+  },
+  "SERIALIZABLE": {
+   "dirty": "等锁",
+   "nonrepeatable": "等锁",
+   "phantom": "等锁",
+   "lost": "报错",
+   "skew": "报错"
+  }
+ }
+}

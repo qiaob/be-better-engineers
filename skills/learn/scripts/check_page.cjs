@@ -102,10 +102,16 @@ function checkData(D) {
     }
     if (dm.kind === 'frames') dm.steps.forEach((sp, k) => {
       const at = where + '第 ' + (k + 1) + ' 步';
+      if (sp.table) {
+        const head = sp.table.head || [], rows = sp.table.rows || [];
+        if (!head.length || !rows.length) problems.push(at + '的 table 需要 head 和 rows');
+        rows.forEach((r, j) => { if (!Array.isArray(r) || r.length !== head.length) problems.push(at + '的 table 第 ' + (j + 1) + ' 行有 ' + (Array.isArray(r) ? r.length : 0) + ' 格，表头有 ' + head.length + ' 格'); });
+        return;
+      }
       let svg = sp.svg;
       try { if (typeof svg === 'function') svg = svg(); }
       catch (e) { problems.push(at + '的 svg 函数出错：' + e.message); return; }
-      if (typeof svg !== 'string' || svg.indexOf('<svg') < 0) { problems.push(at + '没有 svg'); return; }
+      if (typeof svg !== 'string' || svg.indexOf('<svg') < 0) { problems.push(at + '既没有 svg 也没有 table'); return; }
       if (!/viewBox=/.test(svg)) problems.push(at + '的 svg 没有 viewBox');
       if (!/aria-label=/.test(svg)) warnings.push(at + '的 svg 没有 aria-label，读屏的人不知道这张图在说什么');
       const lit = svg.match(/(?:fill|stroke)\s*(?:=\s*["']|:\s*)(#[0-9a-fA-F]{3,8}|rgb|hsl|black|white|red|blue|green|gray|grey)/g);
@@ -185,16 +191,42 @@ if (!pw || !D) {
 
       const measure = () => page.evaluate(() => {
         const out = [];
+        const name = t => '「' + t.textContent.trim().slice(0, 16) + '」';
+        const area = b => Math.max(0, b.width) * Math.max(0, b.height);
+        const inter = (a, b) => {
+          const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+          const h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+          return w > 0 && h > 0 ? w * h : 0;
+        };
         document.querySelectorAll('.fig svg').forEach(svg => {
           const vb = svg.viewBox && svg.viewBox.baseVal;
           if (!vb || !vb.width) return;
-          svg.querySelectorAll('text').forEach(t => {
-            const b = t.getBBox();
-            if (!b.width) return;
-            if (b.x < vb.x - 2 || b.y < vb.y - 2 || b.x + b.width > vb.x + vb.width + 2 || b.y + b.height > vb.y + vb.height + 2) {
-              const title = svg.closest('.demo') ? (svg.closest('.demo').querySelector('h3') || {}).textContent || '演示' : '概念图';
-              out.push('「' + title + '」里的文字「' + t.textContent.trim().slice(0, 20) + '」超出了图的边界');
-            }
+          const demo = svg.closest('.demo');
+          const title = '「' + (demo ? ((demo.querySelector('h3') || {}).textContent || '演示') : '概念图') + '」里';
+          const texts = Array.from(svg.querySelectorAll('text')).filter(t => t.textContent.trim()).map(t => ({t, b: t.getBBox()})).filter(x => x.b.width);
+          texts.forEach(({t, b}) => {
+            if (b.x < vb.x - 2 || b.y < vb.y - 2 || b.x + b.width > vb.x + vb.width + 2 || b.y + b.height > vb.y + vb.height + 2)
+              out.push(title + '的文字' + name(t) + '超出了图的边界');
+          });
+          // 两段文字互相压住
+          for (let i = 0; i < texts.length; i++) for (let j = i + 1; j < texts.length; j++) {
+            const a = texts[i], c = texts[j];
+            if (inter(a.b, c.b) > 0.3 * Math.min(area(a.b), area(c.b)))
+              out.push(title + '的文字' + name(a.t) + '和' + name(c.t) + '叠在了一起');
+          }
+          // 连线上的字比连线还长，会盖住箭头
+          svg.querySelectorAll('.g-edge, .q-msg').forEach(g => {
+            const ln = g.querySelector('line'), tx = g.querySelector('text');
+            if (!ln || !tx) return;
+            const dx = ln.x2.baseVal.value - ln.x1.baseVal.value, dy = ln.y2.baseVal.value - ln.y1.baseVal.value;
+            if (Math.abs(dx) < Math.abs(dy)) return;
+            if (tx.getBBox().width > Math.abs(dx) - 6) out.push(title + '连线上的字' + name(tx) + '比连线还长，会盖住箭头或碰到两端。缩短它，或者把两头的节点隔开一列');
+          });
+          // 连线上的字压住了节点
+          const rects = Array.from(svg.querySelectorAll('.g-node rect, .q-actor rect')).map(r => r.getBBox());
+          svg.querySelectorAll('.g-edge text, .q-msg text').forEach(tx => {
+            const b = tx.getBBox();
+            if (rects.some(r => inter(b, r) > 0.2 * area(b))) out.push(title + '连线上的字' + name(tx) + '压住了方块');
           });
         });
         return out;
@@ -203,14 +235,18 @@ if (!pw || !D) {
 
       const demos = page.locator('.demo');
       const nd = await demos.count();
+      const stepShots = shots && label === '桌面浅色';
+      if (stepShots) fs.mkdirSync(shots, {recursive: true});
       for (let i = 0; i < nd; i++) {
         const next = demos.nth(i).locator('.ctl .btn.primary');
         for (let k = 0; k < 30; k++) {
+          if (stepShots) await demos.nth(i).screenshot({path: path.join(shots, '演示' + (i + 1) + '-第' + (k + 1) + '步.png')});
           if (await next.isDisabled()) break;
           await next.click();
           (await measure()).forEach(x => add(warnings, x));
         }
       }
+      if (stepShots) await page.locator('#s-map').screenshot({path: path.join(shots, '概念图.png')}).catch(() => {});
       if (shots) {
         fs.mkdirSync(shots, {recursive: true});
         await page.screenshot({path: path.join(shots, label + '.png'), fullPage: true});

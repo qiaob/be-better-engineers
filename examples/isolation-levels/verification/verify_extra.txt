@@ -1,0 +1,10 @@
+E1 PostgreSQL 默认级别（PostgreSQL 是读已提交，MySQL 是可重复读），库存 1，两人同时 stock = stock - 1 WHERE stock > 0：A ok（1 行）；B 等了 0.5 秒后 ok（0 行）；最终库存 0
+E1 MySQL      默认级别（PostgreSQL 是读已提交，MySQL 是可重复读），库存 1，两人同时 stock = stock - 1 WHERE stock > 0：A ok（1 行）；B 等了 0.5 秒后 ok（0 行）；最终库存 0
+
+E2 PostgreSQL REPEATABLE READ  两人都查到 0/0 条冲突；A 插入 ok（1 行） 提交 ok；B 插入 ok（1 行） 提交 ok；最终 9 点这间会议室有 2 条预订
+E2 PostgreSQL SERIALIZABLE     两人都查到 0/0 条冲突；A 插入 ok（1 行） 提交 ok；B 插入 ok（1 行） 提交 ERROR 40001: could not serialize access due to read/write dependencies among transactions；最终 9 点这间会议室有 1 条预订
+
+E3 MySQL 可重复读：A 先 START TRANSACTION，别人再改成 50 并提交，A 的第一条 SELECT 读到 50
+
+E4 PostgreSQL 读已提交 + FOR UPDATE：A 锁住并数到 2 人；B 等了 0.5 秒，A 提交后 B 数到 1 人
+E4b PostgreSQL 不允许 count(*) 加 FOR UPDATE：FOR UPDATE is not allowed with aggregate functions

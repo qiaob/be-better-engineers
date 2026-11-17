@@ -8,7 +8,7 @@ AI 比我们懂得更广、更深之后，工程师要回答两个问题：**出
 |---|---|
 | [docs/career.md](docs/career.md) | **出路**。什么在降价、什么在涨价，经验里哪部分值钱，五条路各靠什么、第一步做什么 |
 | [skills/learn](skills/learn/SKILL.md) | **学习 skill**。让 Claude 按一套固定的流程教你学会一样新东西，以图为主，并且每一步都要你自己动手 |
-| [examples/consistent-hashing.html](examples/consistent-hashing.html) | 学习 skill 生成的一页学习页，主题是一致性哈希。下载后用浏览器打开 |
+| [examples/](examples/) | 学习 skill 生成的两页学习页：[一致性哈希](examples/consistent-hashing.html)，[事务隔离级别](examples/isolation-levels/isolation-levels.html)。下载后用浏览器打开 |
 
 ## 学习 skill 做什么
 
@@ -38,7 +38,9 @@ flowchart LR
 - **每一步都要你出力**。先猜再讲，学完自己讲一遍，再做一道没见过的题，过几天回来复习。
 - **说清楚核对到了什么程度**。每个关键说法标明是实际验证过的、通用知识，还是推测。
 
-可以在对话里一步一步学，也可以生成一页能反复打开的学习页：概念图能点，演示能一步步放，小测能作答，复习日期会记下来。生成的页面会先过一遍检查脚本，确认没有报错、没有溢出、深色模式下看得清。
+可以在对话里一步一步学，也可以生成一页能反复打开的学习页：概念图能点，演示能一步步放，小测能作答，复习日期会记下来。生成的页面会先过一遍检查脚本，确认没有报错、没有溢出、文字没有叠在一起，再逐张看每一步的截图。
+
+事务隔离级别那一页是这个 skill 在测试时自己做的：它在本机装了 PostgreSQL 和 MySQL，把页面上的每条说法都跑了实验，实验脚本和输出放在 [examples/isolation-levels/verification](examples/isolation-levels/verification/)。
 
 ## 安装
 
@@ -80,5 +82,5 @@ skills/learn/
   scripts/check_page.cjs          检查生成的学习页
   assets/learning-page.html       学习页模板
   evals/                          测试用例：在 skills/learn 目录下运行 claude plugin eval .
-examples/                         生成好的学习页
+examples/                         生成好的学习页，隔离级别那页附实验记录
 ```
